@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+print("Generating plots.")
+import importlib
+from collections import namedtuple
+
+import numpy as np
+import matplotlib.pyplot as plt
+seaborn_loader = importlib.find_loader("seaborn")
+
+if seaborn_loader is not None:
+    import seaborn as sns
+else:
+    sns = None
+
+if sns:
+    sns.set_context('poster', font_scale=1.,
+            rc={"lines.linewidth": 6})
+    sns.set_style('white')
+
+
+FData = namedtuple('FData', ['fname', 'latex', 'd2latex'])
+MData = namedtuple('MData', ['fname', 'description'])
+
+fun_names = [
+        FData('f1', '2x^2', '-4'), 
+        FData('f2', '\sin\left(\\frac{\pi}{2} x\\right)', '-\\frac{\pi^2}{4}'
+            '\sin\left({\\frac{\pi}{2} x}\\right)'),
+        FData('f3', '\exp(-x) \sin(10x)', '-\exp(-x) (99 \sin(10x) +' \
+            '20\cos(10x))')
+        ]
+
+method_names = [
+        MData('lu', 'no compression'),
+        MData('pp', 'upper triangular compression'),
+        MData('tri', 'symmetric tridiagonal compression')
+        ]
+
+fig, axes = plt.subplots(len(fun_names), len(method_names), sharey='row',
+        sharex=True, 
+        figsize=(8 * len(fun_names), 7 * len(method_names)))
+
+xlabel = "$x$"
+ylabel = "$u(x)$"
+
+for j, method in enumerate(method_names):
+    for i, fun in enumerate(fun_names):
+        fname = method.fname + '-' + fun.fname
+        print("Plotting {} solution to -u'' = {}.".format(method.description,
+            fun.fname))
+        data = np.loadtxt('data/' + fname + '.txt', delimiter=',')
+        fig_title = "Poisson 1D Boundary Value Problem $-u'' = f$ ($N =" \
+                "{}$)".format(len(data))
+
+        err = data[:,1] - data[:,2]
+        l2_err = np.linalg.norm(err, ord=2)
+        linf_err = np.abs(np.max(err))
+
+        approx_plot = (data[:,0], data[:,1])
+        approx_plot_settings = {
+                'label': 'Approximate Solution', 
+                'color': 'c',
+                'linestyle': '--',
+                }
+
+        exact_plot = (data[:,0], data[:,2])
+        exact_plot_settings = {
+                'label': "Exact Solution: $u(x) = {}$".format(fun.latex),
+                'color': 'k',
+                }
+
+        title = ("$-u''(x) = {}$\n{}".format(fun.d2latex,
+            method[1]),)
+
+        fig_ind, ax = plt.subplots(1,1, figsize=(13,10))
+        for axis in [ax, axes[i,j]]:
+            axis.plot(*exact_plot, **exact_plot_settings)
+            axis.plot(*approx_plot, **approx_plot_settings)
+
+            axis.text(0.7 * axis.get_xlim()[1], axis.get_ylim()[0] + .1, 
+                    '$L_2 = ${:.2e}\n$L_\infty = ${:.2e}'.format(
+                        l2_err, linf_err))
+
+            axis.set_title(*title)
+
+        fig_ind.suptitle(fig_title)
+        if sns:
+            sns.despine(fig_ind)
+            sns.despine(fig, axes[i,j])
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.legend()
+        fig_ind.savefig('plots/' + fname + '.png', bbox_inches='tight')
+        plt.close(fig_ind)
+
+print("Plotting composite figure.")
+
+fig.suptitle(fig_title)
+axes[0, 0].legend(loc='upper left')
+axes[0,0].set_ylabel(ylabel)
+axes[1, 0].legend(loc='upper left')
+axes[1,0].set_ylabel(ylabel)
+axes[2, 0].legend(loc='upper right')
+axes[2,0].set_ylabel(ylabel)
+
+
+
+for j in range(len(method_names)):
+    axes[1,j].set_xlabel(xlabel)
+
+fig.savefig('plots/combined.png', bbox_inches='tight')
+plt.close(fig)
